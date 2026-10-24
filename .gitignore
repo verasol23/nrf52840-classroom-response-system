@@ -1,0 +1,31 @@
+# Course materials
+/bai-giang/
+
+# Local configuration and credentials
+/config.ini
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Runtime data
+/data/
+/uploads/
+/web/uploads/
+/backups/
+*.log
+*.sqlite
+*.sqlite3
+*.sql.gz
+
+# Generated files
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+node_modules/
+build/
+dist/

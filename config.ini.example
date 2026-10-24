@@ -1,0 +1,48 @@
+; Cấu hình chung cho bridge.py, ingest.py và web PHP.
+; Chép thành config.ini rồi sửa mật khẩu. Không đưa config.ini lên GitHub.
+
+[db]
+host = 127.0.0.1
+port = 3306
+name = ars
+user = ars
+password = doi_mat_khau_nay
+
+[mqtt]
+host = 127.0.0.1
+port = 1883
+
+[gateway]
+; mã lớp (room) mà gateway / laptop này phục vụ — trùng với room_id của lớp trên web
+room = 1
+; cổng USB của gateway nRF52840 (bridge.py, dịch vụ ars-bridge): auto = tự tìm cổng có firmware gateway (khuyên dùng);
+; hoặc ghi cố định: Windows "COM5", Linux "/dev/ttyACM0", macOS "/dev/cu.usbmodem1101"
+serial = auto
+baud = 115200
+
+[ble]
+; (tuỳ chọn, khi không có gateway — sudo ars gateway ble) thu Remote bằng Bluetooth của laptop (bridge/ble_scan.py, dịch vụ ars-ble)
+adapter = hci0
+; mã công ty trong Manufacturer Data mà firmware Remote dùng (0xFFFF = mã thử nghiệm)
+company_id = 0xFFFF
+; 1 = phát beacon trạng thái (câu đang mở, điểm danh, xác nhận) về Remote — chỉ Linux/BlueZ; 0 = chỉ nghe
+advertise = 1
+; Chế độ 1 nRF GATT (sudo ars gateway gatt, bridge/ble_gatt.py): tên Remote quảng bá, và MAC Remote (khuyên ghi cố định;
+; xem bằng: ars gatt-probe hoặc python3 bridge/ble_gatt.py --scan). Để trống = tìm theo tên.
+remote_name = ARS_REMOTE_01
+remote_address =
+; (thử nghiệm radio, xem firmware/TEST_V3_10.md) dừng quét bao lâu để ưu tiên phát ACK, hai lần dừng cách nhau
+; tối thiểu bao lâu, gộp thay đổi ACK trong bao lâu — mặc định 120 / 400 / 30 ms
+;ack_exclusive_ms = 120
+;ack_pause_gap_ms = 400
+;ack_coalesce_ms = 30
+
+[ingest]
+; pin dưới mức này (mV) thì web cảnh báo "pin yếu"
+low_batt_mv = 2600
+; phát lại STATE định kỳ (giây) dù không có gì thay đổi
+state_refresh_s = 5
+
+[storage]
+; thư mục lưu file bài giảng (Ubuntu: installer tạo /var/lib/ars/uploads). Bỏ trống = ars-server/data/uploads
+; uploads = /var/lib/ars/uploads

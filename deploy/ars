@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# Lệnh tiện ích cho server ARS (cài vào /usr/local/bin/ars)
+DST=/opt/ars-server
+ini() { sudo awk -v s="[$1]" -v k="$2" '$0==s{f=1;next} /^\[/{f=0} f && $1==k {sub(/^[^=]*= */,""); print; exit}' $DST/config.ini 2>/dev/null; }
+case "${1:-}" in
+  status)
+    for s in apache2 mariadb mosquitto bluetooth ars-ingest ars-bridge ars-gatt ars-ble ars-mdns ars-autosync.timer; do
+      st=$(systemctl is-active $s 2>/dev/null); printf '%-12s %s\n' "$s" "${st:-?}"
+    done
+    ;;
+  sync)   # đẩy lên Cloud ngay (bình thường ars-autosync.timer tự làm mỗi 3 phút khi máy bật); ars sync log = nhật ký
+    if [ "${2:-}" = log ]; then journalctl -u ars-autosync -n 30 --no-pager; exit; fi
+    sudo -u ars ARS_CONFIG=$DST/config.ini php $DST/deploy/ars-autosync.php --now ;;
+  logs)   journalctl -u ars-ingest -u ars-bridge -u ars-gatt -u ars-ble -f -n 50 ;;
+  restart) svc=ars-bridge; systemctl is-enabled -q ars-ble 2>/dev/null && svc=ars-ble; systemctl is-enabled -q ars-gatt 2>/dev/null && svc=ars-gatt
+    sudo systemctl restart ars-ingest $svc && echo "đã khởi động lại ingest + $svc" ;;
+  ble)    # in các gói quảng bá Bluetooth máy chủ nghe được (kiểm tra firmware Remote); dừng dịch vụ ars-ble trong lúc xem
+    was=0; systemctl is-active -q ars-ble 2>/dev/null && was=1
+    sudo systemctl stop ars-ble; sudo rfkill unblock bluetooth 2>/dev/null
+    echo "Bấm nút trên Remote — dòng '→ ARS' là gói đúng định dạng. Ctrl+C để thoát."
+    sudo -u ars ARS_CONFIG=$DST/config.ini python3 $DST/bridge/ble_scan.py --dump; [ $was = 1 ] && sudo systemctl start ars-ble ;;
+  ble-tune) # thông số radio BlueZ (Bước 2): ars ble-tune show | scan <chu kỳ ms> <cửa sổ ms> | rotate <ms> | reset
+    conf=/etc/bluetooth/main.conf
+    case "${2:-show}" in
+      show)
+        sudo awk '/^\[LE\]/{f=1;next} /^\[/{f=0} f && /^(ScanIntervalDiscovery|ScanWindowDiscovery|MultiAdvertisementRotationInterval)=/' $conf
+        echo "(không có dòng nào = mặc định của kernel: quét discovery 100 % thời gian, xoay vòng quảng bá 2000 ms)" ;;
+      scan|rotate|reset)
+        sudo cp -n $conf $conf.ars-backup
+        sudo python3 - "$conf" "$2" "${3:-}" "${4:-}" <<'PY'
+import re, sys
+conf, mode, a, b = sys.argv[1:5]
+s = open(conf).read()
+def setkey(s, key, val):
+    s = re.sub(rf'(?m)^#?\s*{key}=.*$', '', s)          # bỏ dòng cũ (kể cả dòng mẫu đã comment)
+    if val is None:
+        return s.replace('[LE]\n', f'[LE]\n#{key}=\n', 1)
+    return s.replace('[LE]\n', f'[LE]\n{key}={val}\n', 1)
+if mode == 'scan':
+    iv, win = float(a), float(b)
+    assert 2.5 <= win <= iv <= 10240, 'cần 2.5 <= cửa sổ <= chu kỳ (ms)'
+    s = setkey(s, 'ScanIntervalDiscovery', round(iv / 0.625))   # đơn vị 0,625 ms (HCI)
+    s = setkey(s, 'ScanWindowDiscovery', round(win / 0.625))
+elif mode == 'rotate':
+    s = setkey(s, 'MultiAdvertisementRotationInterval', int(a))  # ms
+else:
+    for k in ('ScanIntervalDiscovery', 'ScanWindowDiscovery', 'MultiAdvertisementRotationInterval'):
+        s = setkey(s, k, None)
+open(conf, 'w').write(s)
+PY
+        sudo systemctl restart bluetooth && sleep 2 && { systemctl is-enabled -q ars-ble 2>/dev/null && sudo systemctl restart ars-ble; true; }
+        echo "Đã áp dụng ($2 ${3:-} ${4:-}); bluetooth (và ars-ble nếu đang dùng) đã khởi động lại. Xem: ars ble-tune show" ;;
+      *) echo "Dùng: ars ble-tune show | scan <chu kỳ ms> <cửa sổ ms> | rotate <ms> | reset" ;;
+    esac ;;
+  gateway) # chọn cách thu sóng: usb (2 nRF: gateway cắm USB, mặc định) | gatt (1 nRF: Remote kết nối GATT với Bluetooth laptop)
+           #                   | ble (1 nRF: laptop quét quảng bá — cũ). Mỗi chế độ cần đúng firmware Remote (HUONG_DAN_1NRF_GATT.md)
+    off() { for s in "$@"; do sudo systemctl disable --now $s 2>/dev/null; done; sudo rm -f $DST/.gateway-ble $DST/.gateway-gatt $DST/.gateway-usb; }
+    case "${2:-}" in
+      usb)  off ars-ble ars-gatt;    sudo systemctl enable --now ars-bridge; echo "Đang dùng gateway nRF52840 cắm USB (ars-bridge) — Remote: firmware/ARS_remote_v3_10" ;;
+      gatt) off ars-bridge ars-ble;  sudo touch $DST/.gateway-gatt; sudo systemctl enable --now ars-gatt; echo "Đang dùng 1 nRF qua BLE GATT (ars-gatt) — Remote: firmware/ARS_remote_gatt" ;;
+      ble)  off ars-bridge ars-gatt; sudo touch $DST/.gateway-ble; sudo systemctl enable --now ars-ble; echo "Đang dùng Bluetooth của máy chủ quét quảng bá (ars-ble) — Remote: firmware/ARS_remote_v3_10" ;;
+      *) if systemctl is-enabled -q ars-gatt 2>/dev/null; then echo "gatt (ars-gatt)"; elif systemctl is-enabled -q ars-ble 2>/dev/null; then echo "ble (ars-ble)"; else echo "usb (ars-bridge)"; fi
+         echo "Đổi: ars gateway usb | gatt | ble" ;;
+    esac ;;
+  gatt-probe) # đo riêng đường BLE GATT: N lần PING/PONG laptop ⇄ Remote (dừng ars-gatt trong lúc đo — chỉ 1 kết nối)
+    was=0; systemctl is-active -q ars-gatt 2>/dev/null && was=1
+    sudo systemctl stop ars-gatt
+    sudo -u ars ARS_CONFIG=$DST/config.ini python3 $DST/bridge/ble_gatt.py --config $DST/config.ini --probe "${2:-100}"
+    [ $was = 1 ] && sudo systemctl start ars-gatt ;;
+  sim)    # chạy thử không cần phần cứng: ars sim [số Remote] [room] — giả lập Remote nRF52840 ở tầng MQTT
+    sudo -u ars ARS_CONFIG=$DST/config.ini python3 $DST/tools/sim_clickers.py --room "${3:-1}" -n "${2:-30}" --duration 300 ;;
+  links)  # in các link cố định cho giáo viên / học sinh
+    lan=$(ini lan name); lan=${lan:-ars.local}; ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    pub=$(sudo mysql -N ars -e "SELECT v FROM settings WHERE k='public_url'" 2>/dev/null)
+    echo "Trong mạng nội bộ (tên cố định): http://$lan/gv   ·   http://$lan/hs"
+    echo "Trong mạng nội bộ (IP):          http://$ip/gv   ·   http://$ip/hs"
+    [ -n "$pub" ] && echo "Qua Internet (mọi nơi):          $pub/gv   ·   $pub/hs" || echo "Qua Internet: chưa bật — sudo ars public on"
+    echo "Gateway USB qua trình duyệt (tuỳ chọn): ws://$lan/mqtt  user $(ini mqtt_public user)" ;;
+  public) # link Internet cố định bằng Tailscale Funnel: ars public on | off | status
+    command -v tailscale >/dev/null || { echo "Chưa cài Tailscale. Cài:  curl -fsSL https://tailscale.com/install.sh | sh  rồi  sudo tailscale up"; exit 1; }
+    case "${2:-status}" in
+      on)
+        name=$(tailscale status --json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))' 2>/dev/null)
+        [ -n "$name" ] || { echo "Tailscale chưa đăng nhập. Chạy: sudo tailscale up"; exit 1; }
+        echo "Bật Funnel cho cổng 80 (lần đầu Tailscale có thể in một link để bạn bấm cho phép HTTPS + Funnel)…"
+        sudo tailscale funnel --bg 80 || { echo "Không bật được Funnel — xem thông báo ở trên (cần Tailscale ≥ 1.52 và bật Funnel trong trang quản trị Tailscale)."; exit 1; }
+        sudo mysql ars -e "INSERT INTO settings (k,v) VALUES ('public_url','https://$name') ON DUPLICATE KEY UPDATE v=VALUES(v)"
+        echo; echo "Link cố định qua Internet:"; echo "   Giáo viên: https://$name/gv"; echo "   Học sinh : https://$name/hs" ;;
+      off)
+        sudo tailscale funnel reset && sudo mysql ars -e "DELETE FROM settings WHERE k='public_url'" && echo "Đã tắt link Internet." ;;
+      *) tailscale funnel status ;;
+    esac ;;
+  lan-name) # đổi tên cố định trong LAN: ars lan-name lop-hoc.local
+    n="${2:-}"; [[ "$n" =~ ^[a-z0-9-]+\.local$ ]] || { echo "Tên phải dạng ten.local (chữ thường, số, gạch ngang)"; exit 1; }
+    sudo sed -i "/^\[lan\]/,/^\[/ s/^name *=.*/name = $n/" $DST/config.ini
+    sudo mysql ars -e "INSERT INTO settings (k,v) VALUES ('lan_name','$n') ON DUPLICATE KEY UPDATE v=VALUES(v)"
+    sudo systemctl restart ars-mdns && echo "Đã đổi: http://$n/gv  ·  http://$n/hs" ;;
+  ports)  # liệt kê cổng serial, đánh dấu cổng có firmware gateway (cổng ars-bridge đang giữ thì không hỏi được — xem ars gw)
+    python3 $DST/bridge/bridge.py --list ;;
+  gw)     # tình trạng gateway nRF52840: dịch vụ, cổng, firmware, thống kê 5 s gần nhất
+    room=$(ini gateway room); room=${room:-1}
+    echo "ars-bridge: $(systemctl is-active ars-bridge 2>/dev/null)   (room $room, [gateway] serial = $(ini gateway serial))"
+    mosquitto_sub -t "ars/$room/gw/status" -C 1 -W 3 2>/dev/null | python3 -c '
+import json, sys, time
+raw = sys.stdin.read().strip()
+if not raw: sys.exit("Chưa có trạng thái gateway (ars-bridge chưa chạy?). Xem: journalctl -u ars-bridge -n 30")
+s = json.loads(raw); g = s.get("gw") or {}
+print("online   :", "CÓ" if s.get("online") else "KHÔNG", " cổng", s.get("port"), " firmware", s.get("fw") or "?",
+      " cập nhật", int(time.time() - s.get("ts", 0)), "s trước")
+print("5 s qua  : nghe", g.get("rx", "?"), "bản gói, gửi lên", g.get("fwd", "?"), ", bỏ bản lặp", g.get("dup", "?"),
+      ", lệnh từ server", g.get("cmd", "?"), ", phát beacon", g.get("adv", "?"), ", room", g.get("room", "?"))
+bad = {k: g[k] for k in ("qdrop", "usbdrop", "adverr", "bad") if g.get(k)}
+print("lỗi      :", bad or "không")'
+    echo "Log trực tiếp: journalctl -u ars-bridge -f" ;;
+  mqtt)   # xem mọi bản tin MQTT (gói clicker, lệnh STATE…)
+    mosquitto_sub -v -t 'ars/#' ;;
+  db)     # mở MariaDB trên terminal, đã chọn sẵn CSDL ars (thoát: exit)
+    sudo mysql --default-character-set=utf8mb4 ars ;;
+  sql)    # chạy nhanh một câu SQL: ars sql "SELECT * FROM students LIMIT 5"
+    sudo mysql --default-character-set=utf8mb4 -t ars -e "$2" ;;
+  tables) # liệt kê các bảng và số dòng
+    sudo mysql --default-character-set=utf8mb4 -t ars -e "SELECT table_name AS bang, table_rows AS so_dong_uoc_tinh FROM information_schema.tables WHERE table_schema='ars' ORDER BY table_name" ;;
+  watch)  # theo dõi CSDL trực tiếp, làm mới mỗi giây: ars watch [số dòng đáp án]
+    sudo ARS_WATCH_N="${2:-10}" bash -c 'while :; do o=$(bash '"$DST"'/deploy/ars-watch 2>&1); printf "\033[H\033[2J%s\n" "$o"; sleep 1; done' ;;
+  gv)     # liệt kê tài khoản giáo viên
+    sudo mysql --default-character-set=utf8mb4 -t ars -e "SELECT id, username AS ten_dang_nhap, full_name AS ho_ten, IF(is_admin,'quản trị','') AS quyen, IF(active,'','KHOÁ') AS trang_thai, last_login AS dang_nhap_cuoi FROM teachers" ;;
+  reset-gv) # đặt lại mật khẩu giáo viên: ars reset-gv [tên đăng nhập]
+    u="${2:-}"
+    [ -n "$u" ] || { sudo mysql -N ars -e "SELECT username FROM teachers" | sed 's/^/  - /'; read -rp "Tên đăng nhập: " u; }
+    [ "$(sudo mysql -N ars -e "SELECT COUNT(*) FROM teachers WHERE username='${u//\'/}'")" = 1 ] || { echo "Không có tài khoản '$u'"; exit 1; }
+    read -rsp "Mật khẩu mới (≥ 6 ký tự): " p1; echo; read -rsp "Nhập lại: " p2; echo
+    [ "$p1" = "$p2" ] && [ ${#p1} -ge 6 ] || { echo "Mật khẩu không khớp hoặc quá ngắn"; exit 1; }
+    h=$(P="$p1" php -r 'echo password_hash(getenv("P"), PASSWORD_DEFAULT);')
+    sudo mysql ars -e "UPDATE teachers SET password_hash='$h' WHERE username='${u//\'/}'" && echo "Đã đặt lại mật khẩu cho $u" ;;
+  backup) # sao lưu CSDL: ars backup [file]
+    f="${2:-ars_$(date +%Y%m%d_%H%M).sql}"; sudo mysqldump --single-transaction ars > "$f" && echo "đã lưu $f" ;;
+  *)
+    echo "Dùng: ars links | public on|off|status | lan-name ten.local | status | sync [log] | logs | restart | ble | ble-tune | gateway usb|gatt|ble | gw | gatt-probe [n] | sim [n] [room] | ports | mqtt | db | sql \"<câu SQL>\" | tables | watch [n] | gv | reset-gv [tên] | backup [file]" ;;
+esac
