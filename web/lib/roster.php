@@ -53,7 +53,7 @@ function roster_docx(string $path): array {
 }
 
 /** Văn bản: mỗi dòng một học sinh. Tách theo tab ; | (hoặc dấu phẩy); không có dấu tách thì nhận dạng
- *  "12. 23134001 Nguyễn Văn A", "23134001 - Nguyễn Văn A", "Nguyễn Văn A". */
+ *  "12. DEMO001 Nguyễn Văn A", "DEMO001 - Nguyễn Văn A", "Nguyễn Văn A". */
 function roster_text(string $txt): array {
     if (str_starts_with($txt, "\xEF\xBB\xBF")) $txt = substr($txt, 3);
     $rows = [];

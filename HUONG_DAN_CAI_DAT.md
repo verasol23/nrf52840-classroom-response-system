@@ -37,7 +37,7 @@ Chỉ cần nhớ **/gv** (giáo viên) và **/hs** (học sinh). Nhiều giáo 
 | Cùng mạng Wi-Fi/LAN — tên cố định | `http://ars.local/gv` | `http://ars.local/hs` | Máy tính, iPhone, Android 12+. Đổi tên: `sudo ars lan-name lop-iot.local` |
 | Cùng mạng — theo IP | `http://<IP>/gv` | `http://<IP>/hs` | Nên đặt *DHCP reservation* cho máy chủ trong router để IP không đổi |
 | **Mọi nơi, qua Internet (https)** | `https://<tên-máy>.<tailnet>.ts.net/gv` | `…/hs` | Bật một lần bằng Tailscale Funnel (bên dưới) |
-| ↳ máy chủ hiện tại (laptop) | `https://ngoc-legion-5-15arp8.tail4be8bf.ts.net/gv` | `https://ngoc-legion-5-15arp8.tail4be8bf.ts.net/hs` | Đang bật; kiểm tra qua Internet ngày 14/10/2026: trang học sinh / giáo viên trả 200 |
+| ↳ ví dụ (thay bằng máy của bạn) | `https://your-server.your-tailnet.ts.net/gv` | `https://your-server.your-tailnet.ts.net/hs` | Ví dụ cấu hình; tự xác minh trước khi triển khai |
 
 - `ars links` in toàn bộ link. Trên web: **Tổng quan** có ô link + mã QR; **Cài đặt → Đường dẫn** có đủ các link.
 - Link vào thẳng một lớp: `…/hs/<MÃ-THAM-GIA>` (ở trang lớp, bấm **QR** để chiếu cho cả lớp quét).
@@ -115,10 +115,10 @@ Các dịch vụ tự chạy khi bật máy. Chỉ cần:
    - bên trái tải `mau/ARS_de_mau.docx` hoặc `mau/ARS_du_lieu_thu.xlsx` → tự tách câu;
    - bên phải nhập yêu cầu cho trợ lý AI;
    - chọn bộ đích ở thanh trên (có "＋ Tạo bộ mới"), bấm **✓ Thêm vào bài kiểm tra / bài ôn tập** dưới từng câu.
-4. **Buổi học** → Buổi 1 → tải `mau/Bai_giang_MQTT_BLE.pdf` → **✨ Tóm tắt bằng AI** → Lưu →
+4. **Buổi học** → Buổi 1 → tải một file bài giảng PDF do bạn có quyền sử dụng → **✨ Tóm tắt bằng AI** → Lưu →
    **✨ Soạn bằng AI từ bài giảng** → thêm câu → quay lại tick **Công bố cho học sinh**.
 5. Vào lớp → **Bắt đầu** buổi → terminal khác chạy `ars sim 30` → bấm **Mở** câu 1.
-6. Học sinh: `http://localhost/ars/student/` → MSSV `23134001`, mật khẩu lần đầu `23134001` → tab **Bài giảng**.
+6. Học sinh: `http://localhost/ars/student/` → MSSV `DEMO001`, mật khẩu lần đầu `DEMO001` → tab **Bài giảng**.
 
 ## 5. Học sinh đăng ký tài khoản
 

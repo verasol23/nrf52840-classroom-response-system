@@ -13,8 +13,8 @@ send_xlsx([
     ],
     'Danh sach lop' => [
         ['So thu tu (ID tren clicker, 1-99)', 'MSSV', 'Ho ten', 'SDT phu huynh'],
-        [1, '23134001', 'Nguyễn Văn An', '0912345678'],
-        [2, '23134002', 'Trần Thị Bình', '0987654321'],
-        [3, '23134003', 'Lê Minh Châu', ''],
+        [1, 'DEMO001', 'Học sinh mẫu 01', ''],
+        [2, 'DEMO002', 'Học sinh mẫu 02', ''],
+        [3, 'DEMO003', 'Học sinh mẫu 03', ''],
     ],
 ], 'ARS_mau_nhap_lieu.xlsx');

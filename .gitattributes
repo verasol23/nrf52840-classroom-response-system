@@ -1,0 +1,10 @@
+* text=auto
+*.sh text eol=lf
+*.py text eol=lf
+*.php text eol=lf
+*.ino text eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.docx binary
+*.xlsx binary

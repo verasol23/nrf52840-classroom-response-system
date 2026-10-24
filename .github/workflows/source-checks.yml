@@ -1,0 +1,23 @@
+name: Source checks
+on:
+  push:
+  pull_request:
+jobs:
+  syntax-and-codec:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install interpreters and C++ compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y php-cli g++
+      - name: Python syntax
+        run: python3 -m compileall -q bridge common ingest tools tests
+      - name: PHP syntax
+        run: find web tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l >/dev/null
+      - name: Application JavaScript syntax
+        run: find web/assets -maxdepth 1 -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Compare gateway codec
+        run: python3 tests/gateway_codec_test.py
+      - name: Host firmware simulation
+        run: bash tests/firmware_host/run.sh

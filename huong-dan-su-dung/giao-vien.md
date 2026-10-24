@@ -23,8 +23,8 @@
 
 **Máy chủ:** laptop cài ARS (xem [HUONG_DAN_CAI_DAT.md](../HUONG_DAN_CAI_DAT.md)). Cắm **gateway nRF52840** vào cổng USB của laptop trong giờ học, vì nó thu đáp án từ Remote.
 
-**Đăng nhập:** ở bất cứ đâu mở **https://ngoc-legion-5-15arp8.tail4be8bf.ts.net/gv**; trong lớp cùng Wi-Fi với máy chủ có thể dùng `http://ars.local/gv`.
-Gửi học sinh link **https://ngoc-legion-5-15arp8.tail4be8bf.ts.net/hs** để làm bài ở nhà (laptop máy chủ phải đang bật và có mạng).
+**Đăng nhập:** ở bất cứ đâu mở **https://your-server.your-tailnet.ts.net/gv**; trong lớp cùng Wi-Fi với máy chủ có thể dùng `http://ars.local/gv`.
+Gửi học sinh link **https://your-server.your-tailnet.ts.net/hs** để làm bài ở nhà (laptop máy chủ phải đang bật và có mạng).
 - Lần đầu cài máy chủ: trang đăng nhập cho tạo **tài khoản quản trị**.
 - Giáo viên khác: bấm **Đăng ký**. **Mã mời giáo viên** (do quản trị viên cấp) có thể nhập ngay hoặc để trống và nhập sau.
   - Có mã đúng: tài khoản dùng đầy đủ ngay.
@@ -61,7 +61,7 @@ Nút **▶ Bắt đầu** màu cam luôn ở góc phải để mở nhanh buổi
    - Hoặc bấm **Nhập danh sách (Excel, CSV, Word, TXT)** để nhập cả lớp từ file. Xem trước rồi mới bấm xác nhận:
      - **Excel (.xlsx)** hoặc **CSV** (dấu `,` hoặc `;`, UTF-8);
      - **Word (.docx)**: một bảng, hoặc mỗi dòng một học sinh;
-     - **.txt**: mỗi dòng một học sinh, ví dụ `1. 23134001 Nguyễn Văn An` hoặc `23134001 - Nguyễn Văn An`.
+     - **.txt**: mỗi dòng một học sinh, ví dụ `1. DEMO001 Nguyễn Văn An` hoặc `DEMO001 - Nguyễn Văn An`.
 
      Cột được nhận theo tiêu đề, có dấu hay không dấu đều được: **STT** (số ghế), **MSSV / Mã HS**, **Họ tên**, **SĐT phụ huynh**. Nếu file tách thành hai cột **Họ đệm** và **Tên** thì hệ thống tự ghép lại. Nếu file không có cột STT, số ghế được đánh 1, 2, 3… theo thứ tự trong file; phần xem trước ghi *(tự đánh số)*. File `.doc` cũ cần mở bằng Word rồi lưu lại thành `.docx`.
 3. **Mã tham gia lớp** (ví dụ `FDDC78`) hiện trong trang lớp, kèm link `http://…/hs/FDDC78` và nút **QR** để chiếu cho cả lớp quét. Học sinh chưa có trong danh sách dùng mã này để tự đăng ký vào lớp và được cấp số ghế trống tiếp theo.

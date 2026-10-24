@@ -21,9 +21,9 @@ Tài liệu kỹ thuật khác trong repo:
 
 | Ai | **Ở nhà / mọi mạng (Internet)** | Trong lớp, cùng Wi-Fi với máy chủ |
 |---|---|---|
-| Giáo viên | **https://ngoc-legion-5-15arp8.tail4be8bf.ts.net/gv** | `http://ars.local/gv` hoặc `http://<IP máy chủ>/gv` |
-| Học sinh | **https://ngoc-legion-5-15arp8.tail4be8bf.ts.net/hs** | `http://ars.local/hs` — giáo viên chiếu mã QR trong trang lớp để quét |
-| Phụ huynh | **https://ngoc-legion-5-15arp8.tail4be8bf.ts.net/ars/parent/** | `http://ars.local/ars/parent/` — hoặc bấm "Phụ huynh" ở trang đăng nhập học sinh |
+| Giáo viên | **https://your-server.your-tailnet.ts.net/gv** | `http://ars.local/gv` hoặc `http://<IP máy chủ>/gv` |
+| Học sinh | **https://your-server.your-tailnet.ts.net/hs** | `http://ars.local/hs` — giáo viên chiếu mã QR trong trang lớp để quét |
+| Phụ huynh | **https://your-server.your-tailnet.ts.net/ars/parent/** | `http://ars.local/ars/parent/` — hoặc bấm "Phụ huynh" ở trang đăng nhập học sinh |
 
 Link Internet là của **máy chủ hiện tại (laptop giáo viên)**, bật bằng Tailscale Funnel (`sudo ars public on`): dùng được bằng
 Wi-Fi hay 4G bất kỳ, **khi laptop đang bật và có mạng**. Khi chuyển sang máy chủ Cloud 24/24

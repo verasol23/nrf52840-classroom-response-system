@@ -13,7 +13,7 @@
 using namespace Adafruit_LittleFS_Namespace;
 
 // ============================================================
-// ARS REMOTE - BIDIRECTIONAL BLE V3.11 (folder name kept: ARS_remote_v3_10)
+// ARS REMOTE - BIDIRECTIONAL BLE V3.10
 //
 // Uplink:   Remote -> laptop/server with BLE Manufacturer Data (non-connectable).
 // Downlink: laptop/server -> Remote with STATE/ATTEND/OPENMASK/ACKS (exact ACK/NACK).
@@ -26,13 +26,6 @@ using namespace Adafruit_LittleFS_Namespace;
 //  * exponential randomized backoff 50-150 / 150-400 / 300-800 ms, 4 attempts, SAME seq on retry
 //  * room/seat entered on the keypad (MODE) and stored in flash -> many Remotes can be tested together
 //  * random initial seq per boot (fewer seq collisions after reboot; LOGIN still clears old results)
-//
-// V3.11 vs V3.10 (speed + accuracy for the USB gateway, same pins / keymap / packet format):
-//  * scanner stays ON during the TX burst; the burst stops as soon as the exact result is heard
-//    (gateway puts the ACK on air ~40-80 ms after the first event, inside the 150 ms burst)
-//  * exact LOGIN result: ACKS record (seat, 0, seq, 0, status) — ATTEND bit no longer confirms LOGIN
-//    (it is also set when ANOTHER Remote holds the seat -> V3.10 could show a false "logged in")
-//  * Serial prints dt (first TX -> result, ms) and attempts for every transaction; ADV START FAIL
 // ============================================================
 
 static constexpr uint8_t DEFAULT_ROOM = 1;
@@ -52,18 +45,6 @@ static uint8_t gRoom = DEFAULT_ROOM;
 static uint8_t gSeat = 0;                          // 0 = not set yet
 
 static uint8_t seqNo = 0;
-
-// ----------------------- diagnostics over Serial (step 2 measurements) -----------------------
-//   d : toggle downlink monitor — prints frames/s heard per beacon type every second
-//   u : uplink probe — PROBE_COUNT bursts, one every PROBE_PERIOD_MS, seq 1..N (tools/ble_probe.py counts them)
-//   h : help
-static constexpr uint16_t PROBE_COUNT = 100;
-static constexpr uint32_t PROBE_PERIOD_MS = 700;
-static bool diagMonitor = false;
-static uint32_t diagLastMs = 0;
-static uint16_t probeLeft = 0;
-static uint16_t probeSeq = 0;
-static uint32_t probeNextMs = 0;
 static uint8_t currentQuestion = 1;
 static uint8_t selectedAnswer = 0; // 0 none, 1..10 A..J
 
@@ -88,7 +69,6 @@ struct PendingTx {
     uint8_t answer = 0;
     uint8_t attempts = 0;
     uint32_t deadlineMs = 0;
-    uint32_t firstTxMs = 0;    // first TX of this transaction -> latency (dt) in the result line
 };
 
 static PendingTx pending;
@@ -138,7 +118,6 @@ static const char* resultStatusName(uint8_t status) {
         case 12: return "MAC_BOUND";
         case 13: return "WRONG_LINK";
         case 14: return "MALFORMED";
-        case 15: return "SEQ_REUSED";
         default: return "SERVER_REJECT";
     }
 }
@@ -175,21 +154,9 @@ static UiMode uiMode = UI_NORMAL;
 static uint8_t entryValue = 0;
 static bool entryTyped = false;
 
-// Mỗi chế độ một dấu hiệu (display.h): nhập GHẾ = "Gh" ↔ số + đèn xanh nháy chậm,
-// nhập PHÒNG = "Ph" ↔ số + đèn đỏ nháy chậm.
-static constexpr uint16_t ENTRY_LED_ON_MS = 120;
-static constexpr uint16_t ENTRY_LED_PERIOD_MS = 1000;
-
 static void showEntry() {
-    const bool room = uiMode == UI_ENTER_ROOM;
-    displaySetEntry(room ? 1 : 0, entryTyped || entryValue != 0, entryValue);
-    statusLedPattern(room ? STATUS_RED : STATUS_GREEN, ENTRY_LED_ON_MS, ENTRY_LED_PERIOD_MS);
-}
-
-static void leaveEntry() {
-    uiMode = UI_NORMAL;
-    statusLedPatternOff();
-    displaySetNumber(currentQuestion);
+    if (!entryTyped && entryValue == 0) displaySetDashes();
+    else displaySetNumber(entryValue);
 }
 
 // uint8_t parameter: the Arduino builder puts auto-prototypes above the enum declaration.
@@ -227,12 +194,11 @@ static void transmitPending(bool retry) {
     if (pending.kind == PENDING_NONE) return;
 
     pending.attempts++;
-    bool ok;
 
     if (pending.kind == PENDING_LOGIN) {
         printPacket(retry ? "RETRY LOGIN" : "TX LOGIN",
                     ArsBle::TYPE_LOGIN, 0, pending.seq, 0);
-        ok = ArsBle::sendPacket(
+        ArsBle::sendPacket(
             ArsBle::TYPE_LOGIN,
             gRoom,
             gSeat,
@@ -247,7 +213,7 @@ static void transmitPending(bool retry) {
                     pending.question,
                     pending.seq,
                     pending.answer);
-        ok = ArsBle::sendPacket(
+        ArsBle::sendPacket(
             ArsBle::TYPE_ANSWER,
             gRoom,
             gSeat,
@@ -258,9 +224,7 @@ static void transmitPending(bool retry) {
         );
     }
 
-    if (!ok) Serial.println("ADV START FAIL: SoftDevice did not transmit this attempt");
-    // sendPacket() returns after the TX burst (or earlier, once the result was heard) with the scanner
-    // running: listen for the exact result.
+    // sendPacket() returns after the TX burst with the scanner running: listen for the exact result.
     pending.deadlineMs = millis() + ACK_LISTEN_MS;
 }
 
@@ -275,7 +239,6 @@ static void beginLogin() {
     pending.seq = nextSeq();
     pending.answer = 0;
     pending.attempts = 0;
-    pending.firstTxMs = millis();
     retryBackoffArmed = false;
 
     statusLedSet(STATUS_OFF);
@@ -309,43 +272,19 @@ static void beginAnswer() {
     pending.seq = nextSeq();
     pending.answer = selectedAnswer;
     pending.attempts = 0;
-    pending.firstTxMs = millis();
     retryBackoffArmed = false;
-    displaySetAnswer(selectedAnswer, false);     // chữ cái đứng yên = đang gửi
 
     statusLedSet(STATUS_OFF);
     transmitPending(false);
 }
 
-static void printTiming() {
-    Serial.print(" dt=");
-    Serial.print(static_cast<uint32_t>(millis() - pending.firstTxMs));
-    Serial.print("ms attempts=");
-    Serial.println(pending.attempts);
-}
-
-static void finishLoginResult(uint8_t seq, uint8_t status) {
+static void finishLoginAck() {
     if (pending.kind != PENDING_LOGIN) return;
-    if (seq != pending.seq) {                        // result of an older LOGIN: keep waiting for this one
-        Serial.print("Ignore old LOGIN result seq=");
-        Serial.println(seq);
-        return;
-    }
-    if (status == 0) {
-        Serial.print("ACK LOGIN EXACT: server confirmed attendance seq=");
-        Serial.print(seq);
-        printTiming();
-        statusLedFlash(STATUS_GREEN, 350);
-    } else {
-        Serial.print("NACK LOGIN EXACT: server rejected seq=");
-        Serial.print(seq);
-        Serial.print(" reason=");
-        Serial.print(resultStatusName(status));
-        printTiming();
-        statusLedFlash(STATUS_RED, 900);
-    }
+
+    Serial.println("ACK LOGIN: server confirmed attendance");
     pending.kind = PENDING_NONE;
     retryBackoffArmed = false;
+    statusLedFlash(STATUS_GREEN, 350);
 }
 
 static void finishAnswerAck(uint8_t q, uint8_t seq, uint8_t ans, uint8_t status) {
@@ -368,8 +307,7 @@ static void finishAnswerAck(uint8_t q, uint8_t seq, uint8_t ans, uint8_t status)
         Serial.print(" seq=");
         Serial.print(seq);
         Serial.print(" ans=");
-        Serial.print(answerLetter(ans));
-        printTiming();
+        Serial.println(answerLetter(ans));
         statusLedFlash(STATUS_GREEN, 450);
     } else {
         Serial.print("NACK ANSWER EXACT: server rejected q=");
@@ -379,8 +317,7 @@ static void finishAnswerAck(uint8_t q, uint8_t seq, uint8_t ans, uint8_t status)
         Serial.print(" ans=");
         Serial.print(answerLetter(ans));
         Serial.print(" reason=");
-        Serial.print(resultStatusName(status));
-        printTiming();
+        Serial.println(resultStatusName(status));
         statusLedFlash(STATUS_RED, 700);
     }
 
@@ -393,10 +330,8 @@ static void finishAnswerAck(uint8_t q, uint8_t seq, uint8_t ans, uint8_t status)
 }
 
 static void processDownlink() {
-    uint8_t loginSeq = 0;
-    uint8_t loginStatus = 0;
-    if (ArsBle::takeLoginResult(loginSeq, loginStatus)) {
-        finishLoginResult(loginSeq, loginStatus);
+    if (ArsBle::takeLoginAck()) {
+        finishLoginAck();
     }
 
     uint8_t ackQuestion = 0;
@@ -443,10 +378,7 @@ static void processRetry() {
     if ((int32_t)(now - pending.deadlineMs) < 0) return;
 
     if (pending.attempts >= MAX_ATTEMPTS) {
-        Serial.print("ACK TIMEOUT: server did not confirm");
-        printTiming();
-        // ANSWER hết giờ: chữ cái nhấp nháy lại = chưa gửi được, bấm OK để gửi lại
-        if (pending.kind == PENDING_ANSWER && selectedAnswer) displaySetAnswer(selectedAnswer, true);
+        Serial.println("ACK TIMEOUT: server did not confirm");
         pending.kind = PENDING_NONE;
         retryBackoffArmed = false;
         statusLedFlash(STATUS_RED, 900);
@@ -494,8 +426,9 @@ static void handleEntryKey(KeyId key) {
             startEntry(uiMode == UI_ENTER_SEAT ? UI_ENTER_ROOM : UI_ENTER_SEAT);
             break;
         case KEY_LEFT:                               // cancel
-            leaveEntry();
+            uiMode = UI_NORMAL;
             Serial.println("Entry cancelled");
+            displaySetNumber(currentQuestion);
             if (gSeat == 0) startEntry(UI_ENTER_SEAT);
             break;
         case KEY_OK:
@@ -518,7 +451,8 @@ static void handleEntryKey(KeyId key) {
                 ArsBle::setIdentity(gRoom, gSeat);
                 Serial.print("Seat saved: ");
                 Serial.println(gSeat);
-                leaveEntry();
+                uiMode = UI_NORMAL;
+                displaySetNumber(currentQuestion);
                 beginLogin();                        // OK without typing = LOGIN again (old MODE behaviour)
             }
             break;
@@ -553,7 +487,7 @@ static void handleKey(KeyId key) {
         selectedAnswer = candidate;
         Serial.print("Selected answer: ");
         Serial.println(answerLetter(selectedAnswer));
-        displaySetAnswer(selectedAnswer, true);  // chữ cái nhấp nháy = đã chọn, chưa gửi (bấm OK)
+        displaySetNumber(selectedAnswer); // temporary A..J code 01..10
         return;
     }
 
@@ -599,32 +533,21 @@ static void handleKey(KeyId key) {
     }
 }
 
-static uint32_t hardwareRandom32() {
-    NRF_RNG->CONFIG = RNG_CONFIG_DERCEN_Msk;      // bias correction
-    NRF_RNG->EVENTS_VALRDY = 0;
-    NRF_RNG->TASKS_START = 1;
-    uint32_t v = 0;
-    for (uint8_t i = 0; i < 4; ++i) {
-        const uint32_t t0 = micros();
-        while (!NRF_RNG->EVENTS_VALRDY && (uint32_t)(micros() - t0) < 2000) {}
-        NRF_RNG->EVENTS_VALRDY = 0;
-        v = (v << 8) | (NRF_RNG->VALUE & 0xFF);
-    }
-    NRF_RNG->TASKS_STOP = 1;
-    return v;
-}
-
 void setup() {
     nrf_gpio_cfg_output(BoardPins::EXT_VCC);
     nrf_gpio_pin_set(BoardPins::EXT_VCC);
 
     Serial.begin(115200);
+    const uint32_t serialWaitStart = millis();
+    while (!Serial && (uint32_t)(millis() - serialWaitStart) < 3000) {
+        delay(10);
+    }
+
     displayBegin();
     statusLedBegin();
     keypadBegin();
 
-    // Proven hardware self-test — ngay khi bật nguồn: "88" + đỏ 0,5 s + xanh 0,5 s.
-    // (V3.10 chờ cổng Serial tới 3 s TRƯỚC bước này → chạy pin thì màn hình và đèn tối 3 s sau reset.)
+    // Proven hardware self-test.
     displaySetNumber(88);
     statusLedSet(STATUS_RED);
     uint32_t t0 = millis();
@@ -637,22 +560,14 @@ void setup() {
     statusLedSet(STATUS_OFF);
     displaySetNumber(currentQuestion);
 
-    // Chỉ khi đang cắm USB (có VBUS) mới chờ máy tính mở cổng Serial — tối đa 2 s, để log khởi động không mất.
-    // Chạy pin: không chờ.
-    if (NRF_POWER->USBREGSTATUS & POWER_USBREGSTATUS_VBUSDETECT_Msk) {
-        const uint32_t serialWaitStart = millis();
-        while (!Serial && (uint32_t)(millis() - serialWaitStart) < 2000) displayUpdate();
-    }
-
     Serial.println();
-    Serial.println("ARS Remote bidirectional V3.11");
-    Serial.println("BLE: TX burst <=150 ms (scan on, stops at result) + ACK listen 1000 ms + exact ACK/NACK (LOGIN too) + backoff");
+    Serial.println("ARS Remote bidirectional V3.10");
+    Serial.println("BLE: TX burst 150 ms + ACK listen 1000 ms + exact ACK/NACK + exponential backoff");
     Serial.println("GPIO: physical nRF52840 pins via nrf_gpio");
 
-    // Seed from the nRF52840 hardware RNG (thermal noise) — read BEFORE the SoftDevice owns the RNG.
-    // V3.10 used micros() ^ DEVICEID: without the Serial wait the boot time is identical every reset,
-    // so every reboot restarted at the SAME seq (field log: LOGIN seq=104 after each reset).
-    randomSeed(hardwareRandom32() ^ NRF_FICR->DEVICEID[0] ^ NRF_FICR->DEVICEID[1]);
+    // Per-device pseudo-random seed for retry backoff. Different remotes have
+    // different DEVICEID values, so simultaneous retries spread out naturally.
+    randomSeed(static_cast<uint32_t>(micros()) ^ NRF_FICR->DEVICEID[0] ^ NRF_FICR->DEVICEID[1]);
     seqNo = static_cast<uint8_t>(random(256));      // random start: a reboot rarely reuses a recent seq
 
     loadIdentity();
@@ -668,55 +583,9 @@ void setup() {
     Serial.println("Green = accepted exact result. Red = server NACK or ACK timeout.");
 }
 
-static void processDiag() {
-    while (Serial.available()) {
-        const int c = Serial.read();
-        if (c == 'd') {
-            diagMonitor = !diagMonitor;
-            uint32_t junk[5]; uint8_t ph; int16_t rs;
-            ArsBle::diagSnapshot(junk, ph, rs);          // start from zero
-            diagLastMs = millis();
-            Serial.println(diagMonitor ? "DIAG monitor ON (frames/s heard for this room)" : "DIAG monitor OFF");
-        } else if (c == 'u') {
-            probeLeft = PROBE_COUNT;
-            probeSeq = 0;
-            probeNextMs = millis();
-            Serial.print("DIAG uplink probe: ");
-            Serial.print(PROBE_COUNT);
-            Serial.println(" bursts (run tools/ble_probe.py uplink on the laptop)");
-        } else if (c == 'h') {
-            Serial.println("DIAG: d = downlink monitor on/off, u = uplink probe, h = help");
-        }
-    }
-    const uint32_t now = millis();
-    if (diagMonitor && (uint32_t)(now - diagLastMs) >= 1000) {
-        uint32_t n[5]; uint8_t ph; int16_t rs;
-        ArsBle::diagSnapshot(n, ph, rs);
-        const float secs = (now - diagLastMs) / 1000.0f;
-        diagLastMs = now;
-        Serial.print("DIAG RX/s STATE="); Serial.print(n[0] / secs, 1);
-        Serial.print(" ATTEND=");   Serial.print(n[1] / secs, 1);
-        Serial.print(" OPENMASK="); Serial.print(n[2] / secs, 1);
-        Serial.print(" ACKS=");     Serial.print(n[3] / secs, 1);
-        Serial.print(" PROBE=");    Serial.print(n[4] / secs, 1);
-        Serial.print(" phase=");    Serial.print(ph);
-        Serial.print(" rssi=");     Serial.println(rs);
-    }
-    if (probeLeft && pending.kind == PENDING_NONE && (int32_t)(now - probeNextMs) >= 0) {
-        probeSeq++;
-        probeLeft--;
-        probeNextMs = now + PROBE_PERIOD_MS;
-        ArsBle::sendPacket(ArsBle::TYPE_PROBE, gRoom, gSeat, 0, static_cast<uint8_t>(probeSeq), 0, TEST_BATTERY_MV);
-        Serial.print("DIAG TX PROBE seq=");
-        Serial.println(probeSeq);
-        if (!probeLeft) Serial.println("DIAG uplink probe done");
-    }
-}
-
 void loop() {
     displayUpdate();
     statusLedUpdate();
-    processDiag();
 
     // Consume BLE beacons produced by server and handle ACKs.
     processDownlink();

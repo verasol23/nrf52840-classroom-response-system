@@ -1,0 +1,17 @@
+{
+  "files": 429,
+  "total_bytes": 8855097,
+  "firmware_versions": [
+    "ARS_remote_v3_15",
+    "ARS_remote_v3_14",
+    "ARS_remote_gatt",
+    "server_archive_v3_10",
+    "ARS_remote_v3_10",
+    "ARS_remote_v3_16",
+    "ARS_remote_v3_11",
+    "ARS_remote_v3_13",
+    "ARS_remote_v3_17",
+    "ARS_gateway_v3_10"
+  ],
+  "root": "/mnt/data/nrf52840-classroom-response-system-release"
+}

@@ -126,19 +126,19 @@ def docx_table(rows):
 def import_file(name, content, mime):
     r = post(t, f'class.php?id={cls2}', {'action': 'import_upload'}, files={'file': (name, content, mime)})
     return r
-r = import_file('ds.docx', docx_table([['STT', 'Mã HS', 'Họ và tên'], ['1', '23134101', 'Nguyễn Văn An'], ['2', '23134102', 'Trần Thị Bình']]),
+r = import_file('ds.docx', docx_table([['STT', 'Mã HS', 'Họ và tên'], ['1', '99999101', 'Nguyễn Văn An'], ['2', '99999102', 'Trần Thị Bình']]),
                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-expect('Nguyễn Văn An' in r.text and 'Trần Thị Bình' in r.text and '23134102' in r.text, 'Word table import preview (STT / Mã HS / Họ và tên)')
+expect('Nguyễn Văn An' in r.text and 'Trần Thị Bình' in r.text and '99999102' in r.text, 'Word table import preview (STT / Mã HS / Họ và tên)')
 post(t, f'class.php?id={cls2}', {'action': 'import_confirm'})
 expect([(x['seat_no'], x['student_code'], x['full_name']) for x in sql('SELECT * FROM students WHERE class_id=%s ORDER BY seat_no', (cls2,))]
-       == [(1, '23134101', 'Nguyễn Văn An'), (2, '23134102', 'Trần Thị Bình')], 'Word list imported')
-r = import_file('ds.csv', '﻿Họ đệm;Tên;MSSV\nLê Hoàng;Cường;23134103\nPhạm Thu;Dung;23134104\n'.encode('utf-8'), 'text/csv')
+       == [(1, '99999101', 'Nguyễn Văn An'), (2, '99999102', 'Trần Thị Bình')], 'Word list imported')
+r = import_file('ds.csv', '﻿Họ đệm;Tên;MSSV\nLê Hoàng;Cường;99999103\nPhạm Thu;Dung;99999104\n'.encode('utf-8'), 'text/csv')
 expect('tự đánh số' in r.text and 'Lê Hoàng Cường' in r.text, 'CSV with "Họ đệm" + "Tên" and no STT: names joined, seats auto-numbered')
 post(t, f'class.php?id={cls2}', {'action': 'import_confirm'})
 got = {x['student_code']: x['seat_no'] for x in sql('SELECT * FROM students WHERE class_id=%s', (cls2,))}
-expect(got.get('23134103') == 1 and got.get('23134104') == 2, 'Auto-numbered seats 1, 2 (file order)')
-r = import_file('ds.txt', '1. 23134105 Võ Minh Em\n2) 23134106 - Đỗ Gia Phúc\n'.encode('utf-8'), 'text/plain')
-expect('Võ Minh Em' in r.text and 'Đỗ Gia Phúc' in r.text and '23134106' in r.text, 'TXT list "1. MSSV Họ tên" parsed')
+expect(got.get('99999103') == 1 and got.get('99999104') == 2, 'Auto-numbered seats 1, 2 (file order)')
+r = import_file('ds.txt', '1. 99999105 Võ Minh Em\n2) 99999106 - Đỗ Gia Phúc\n'.encode('utf-8'), 'text/plain')
+expect('Võ Minh Em' in r.text and 'Đỗ Gia Phúc' in r.text and '99999106' in r.text, 'TXT list "1. MSSV Họ tên" parsed')
 r = import_file('ds.doc', b'binary', 'application/msword')
 expect('.docx' in BeautifulSoup(r.text, 'html.parser').get_text(), 'Old .doc gives a clear "save as .docx" message')
 

@@ -66,8 +66,8 @@ sudo ars public on                                        # lần đầu có th�
 ```
 Kết quả, ví dụ:
 ```
-Giáo viên: https://ars-cloud.tail4be8bf.ts.net/gv
-Học sinh : https://ars-cloud.tail4be8bf.ts.net/hs
+Giáo viên: https://your-cloud.your-tailnet.ts.net/gv
+Học sinh : https://your-cloud.your-tailnet.ts.net/hs
 ```
 Kiểm tra từ điện thoại **chỉ bật 4G**: mở link `/hs` → thấy trang đăng nhập học sinh là xong.
 

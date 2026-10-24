@@ -1,31 +1,46 @@
-# Course materials
-/bai-giang/
-
-# Local configuration and credentials
-/config.ini
+# Secrets / local configuration
+config.ini
 .env
 .env.*
 !.env.example
-*.pem
 *.key
+*.pem
 *.p12
 *.pfx
-
-# Runtime data
-/data/
-/uploads/
-/web/uploads/
-/backups/
-*.log
 *.sqlite
 *.sqlite3
-*.sql.gz
+*.log
+*.bak
+*.tar.gz
 
-# Generated files
+# Runtime data and personal material
+/data/
+/uploads/
+/backups/
+/web/uploads/
+/bai-giang/
+/de-thi-test/
+/web/_shot_tmp.php
+/.gateway-ble
+/.gateway-gatt
+/.role-cloud
+
+# Generated files and SDKs
 __pycache__/
-*.pyc
+*.py[cod]
 .pytest_cache/
 .venv/
+venv/
 node_modules/
 build/
 dist/
+.DS_Store
+.vscode/
+.idea/
+
+# KiCad generated/local state
+*.kicad_prl
+*.kicad_autosave*
+*.kicad_sch-bak
+*.kicad_pcb-bak
+*-backups/
