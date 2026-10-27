@@ -6,6 +6,22 @@ An end-to-end classroom-response prototype: a battery-powered nRF52840 handheld 
 
 > **Release status (24 Oct 2026):** The source tree combines the supplied server archive, **Rev J original KiCad source**, and the separately supplied **remote firmware v3.10–v3.17**. These are preserved as supplied, **not claimed to form one fully re-verified hardware/software release**. The v3.17 firmware README requires `ble_adv.py` and `ingest_adv.py`, but those modules were not in the supplied server ZIP. Source files for the separately discussed **ADV18** were also not included. Do not flash a firmware revision expecting that an older server will automatically recognize its packet format.
 
+## Actual project photos and screenshots
+
+The following images are from the project's own documentation and test artifacts. **Physical photos, PCB CAD previews, and web-interface screenshots are different forms of evidence.**
+
+| Physical remote (front) | Physical remote (back) |
+|:--:|:--:|
+| ![Actual handheld remote, front](docs/images/remote_front.png) | ![Actual handheld remote, back](docs/images/remote_back.png) |
+
+| PCB front view (CAD preview) | PCB back view (CAD preview) |
+|:--:|:--:|
+| ![Rev J PCB front CAD](docs/images/pcb_front.png) | ![Rev J PCB back CAD](docs/images/pcb_back.png) |
+
+| Teacher dashboard (software screenshot) | Parent portal (software screenshot) |
+|:--:|:--:|
+| ![Actual teacher-dashboard screenshot](docs/images/teacher_dashboard.png) | ![Actual parent-portal screenshot](docs/images/parent_portal.png) |
+
 ## Hardware prototype
 
 | Physical prototype | Rev J PCB |
